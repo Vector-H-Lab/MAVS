@@ -27,6 +27,7 @@ SIM_LOG = SAVE_ROOT / "simulation_preview.log"
 WAYPOINTS_ROOT = DATA_ROOT / "waypoints"
 ACTORS_ROOT = DATA_ROOT / "actors" / "actors"
 VEHICLE_DEFS_ROOT = DATA_ROOT / "vehicles" / "rp3d_vehicles"
+SENSOR_DEFS_ROOT = DATA_ROOT / "sensors"
 HOST = "127.0.0.1"
 PORT = 8765
 
@@ -131,6 +132,107 @@ def vehicle_def_records() -> list[dict]:
         except Exception:
             continue
     return sorted(records, key=lambda r: r["name"])
+
+
+def _linear_angles(low: float, high: float, step: float) -> list[float]:
+    if step <= 0:
+        return [low]
+    count = max(1, int(round((high - low) / step)) + 1)
+    return [low + index * (high - low) / max(1, count - 1) for index in range(count)]
+
+
+def _sensor_type(data: dict) -> str:
+    explicit = str(data.get("Type", "")).lower()
+    if explicit:
+        return explicit
+    if "Scan Pattern" in data:
+        return "lidar"
+    if "Pixels" in data or "FocalLength" in data or "FocalPlaneDimensions" in data:
+        return "camera"
+    if "Field of View" in data or "Lobe Size" in data:
+        return "radar"
+    if "Accelerometer" in data or "Gyroscope" in data or "Sample Rate" in data:
+        return "imu"
+    return ""
+
+
+def _sensor_metadata(sensor_type: str, data: dict) -> dict:
+    metadata: dict = {}
+    if sensor_type in {"camera", "fisheye"}:
+        focal_length = float(data.get("FocalLength", 0) or 0)
+        dimensions = data.get("FocalPlaneDimensions", [])
+        if focal_length > 0 and isinstance(dimensions, list) and len(dimensions) >= 2:
+            metadata["cameraFov"] = {
+                "tanHalfHorizontal": float(dimensions[0]) / (2 * focal_length),
+                "tanHalfVertical": float(dimensions[1]) / (2 * focal_length),
+            }
+        if isinstance(data.get("Pixels"), list):
+            metadata["pixels"] = data["Pixels"][:2]
+    elif sensor_type == "lidar":
+        scan = data.get("Scan Pattern", {})
+        horizontal = scan.get("Horizontal Range", [])
+        vertical = scan.get("Vertical Range", [])
+        if isinstance(horizontal, list) and len(horizontal) >= 2:
+            metadata["horizontalRange"] = horizontal[:2]
+            metadata["horizontalStep"] = float(scan.get("Horizontal Step", 5) or 5)
+        if isinstance(vertical, list) and len(vertical) >= 2:
+            step = float(scan.get("Vertical Step", 1) or 1)
+            metadata["verticalAngles"] = _linear_angles(float(vertical[0]), float(vertical[1]), step)
+        if "Max Range" in data:
+            metadata["maxRange"] = float(data["Max Range"])
+        if "Min Range" in data:
+            metadata["minRange"] = float(data["Min Range"])
+    elif sensor_type == "radar":
+        if "Field of View" in data:
+            metadata["fieldOfView"] = float(data["Field of View"])
+        if "Max Range" in data:
+            metadata["maxRange"] = float(data["Max Range"])
+    return metadata
+
+
+def sensor_catalog() -> dict:
+    entries = [
+        {"id": "builtin:lidar:M8", "type": "lidar", "model": "M8", "label": "M8", "source": "builtin",
+         "metadata": {"verticalAngles": _linear_angles(-18.22, 3.2, 3.06), "maxRange": 100.0}},
+        {"id": "builtin:lidar:HDL-64E", "type": "lidar", "model": "HDL-64E", "label": "HDL-64E", "source": "builtin",
+         "metadata": {"verticalAngles": _linear_angles(-24.8, 2.0, 0.425396825), "maxRange": 90.0}},
+        {"id": "builtin:lidar:HDL-32E", "type": "lidar", "model": "HDL-32E", "label": "HDL-32E", "source": "builtin",
+         "metadata": {"verticalAngles": _linear_angles(-30.6623, 10.67, 1.3333)}},
+        {"id": "builtin:lidar:VLP-16", "type": "lidar", "model": "VLP-16", "label": "VLP-16", "source": "builtin",
+         "metadata": {"verticalAngles": _linear_angles(-15.0, 15.0, 2.0)}},
+        {"id": "builtin:lidar:LMS-291", "type": "lidar", "model": "LMS-291", "label": "LMS-291", "source": "builtin",
+         "metadata": {"verticalAngles": [0.0], "horizontalRange": [-90.0, 90.0]}},
+        {"id": "builtin:camera:Flea3-4mm", "type": "camera", "model": "Flea3-4mm", "label": "Flea3-4mm", "source": "builtin",
+         "metadata": {"cameraFov": {"tanHalfHorizontal": 0.006784 / 0.008, "tanHalfVertical": 0.0054272 / 0.008}}},
+        {"id": "builtin:camera:XCD-V60", "type": "camera", "model": "XCD-V60", "label": "XCD-V60", "source": "builtin",
+         "metadata": {"cameraFov": {"tanHalfHorizontal": 0.0024 / 0.007, "tanHalfVertical": 0.0018 / 0.007}}},
+        {"id": "builtin:radar:Delphi Long Range", "type": "radar", "model": "Delphi Long Range", "label": "Delphi Long Range", "source": "builtin", "metadata": {}},
+        {"id": "builtin:radar:Delphi Mid Range", "type": "radar", "model": "Delphi Mid Range", "label": "Delphi Mid Range", "source": "builtin", "metadata": {}},
+    ]
+    if SENSOR_DEFS_ROOT.exists():
+        for path in sorted(SENSOR_DEFS_ROOT.rglob("*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                sensor_type = _sensor_type(data)
+                if not sensor_type:
+                    continue
+                rel = path.relative_to(DATA_ROOT).as_posix()
+                entries.append({
+                    "id": f"json:{rel}",
+                    "type": sensor_type,
+                    "model": "",
+                    "label": path.stem,
+                    "source": "json",
+                    "inputFile": str(path.resolve()),
+                    "relativePath": rel,
+                    "metadata": _sensor_metadata(sensor_type, data),
+                })
+            except Exception:
+                continue
+    return {
+        "types": ["lidar", "camera", "gps", "compass", "fisheye", "radar", "imu"],
+        "models": entries,
+    }
 
 
 def safe_data_path(relative_path: str) -> Path:
@@ -275,6 +377,9 @@ class SceneBuilderHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/vehicle-defs":
             self.send_json({"vehicles": vehicle_def_records()})
+            return
+        if parsed.path == "/api/sensor-catalog":
+            self.send_json(sensor_catalog())
             return
         if parsed.path == "/api/scene":
             path = parse_qs(parsed.query).get("path", [""])[0]

@@ -10,7 +10,7 @@ let setStatus, loadModel, setPlaneScale;
 let renderAssets, annotateVehicleGroups, renderVehicleDefs;
 let syncInspector, renderPathList, invalidateLidarCache, clearPathSelection;
 let setZonePlacementMode;
-let vehicleRepresentatives, controllerModeFor, vehicleParamsFor, sensorsFor;
+let vehicleRepresentatives, controllerModeFor, vehicleParamsFor, sensorsFor, sensorCatalogEntry;
 let selectedPath, cameraPosition;
 let addVehicle, syncAllSensorGhosts;
 let currentScenePath = null;
@@ -25,7 +25,7 @@ export function initSceneIO(ctx) {
     setZonePlacementMode,
     vehicleRepresentatives, controllerModeFor, vehicleParamsFor, sensorsFor,
     selectedPath, cameraPosition,
-    addVehicle, syncAllSensorGhosts,
+    addVehicle, syncAllSensorGhosts, sensorCatalogEntry,
   } = ctx);
 }
 
@@ -164,16 +164,21 @@ export function simulationVehiclesJson() {
         ];
       }
     }
-    const sensorList = sensorsFor(chassis).map(s => ({
-      Name: s.name,
-      Type: s.type,
-      ...(s.model ? { Model: s.model } : {}),
-      Offset: [...s.offset],
-      // The editor uses positive pitch for "look up"; MAVS' +Y quaternion
-      // rotation points the sensor's +X forward axis downward.
-      Orientation: eulerToQuat(s.yaw || 0, -(s.pitch || 0), s.roll || 0),
-      "Repitition Rate (Hz)": s.hz,
-    }));
+    const sensorList = sensorsFor(chassis).map(s => {
+      const entry = sensorCatalogEntry?.(s);
+      return {
+        Name: s.name,
+        Type: s.type,
+        ...(entry?.source === "json" || s.inputFile
+          ? { "Input File": entry?.inputFile || s.inputFile }
+          : (s.model ? { Model: s.model } : {})),
+        Offset: [...s.offset],
+        // The editor uses positive pitch for "look up"; MAVS' +Y quaternion
+        // rotation points the sensor's +X forward axis downward.
+        Orientation: eulerToQuat(s.yaw || 0, -(s.pitch || 0), s.roll || 0),
+        "Repitition Rate (Hz)": s.hz,
+      };
+    });
     vehicles.push({
       definition_file: def.definition_file,
       initial_position: vehicleInitialPosition(chassis, def),
@@ -398,6 +403,7 @@ async function hydrateSimulation(simulation, waypoints, driverName) {
     name: sensor.Name || sensor.Type || "sensor",
     type: String(sensor.Type || "").toLowerCase(),
     model: sensor.Model || "",
+    inputFile: sensor["Input File"] || "",
     offset: [...(sensor.Offset || [0, 0, 0])],
     hz: Number(sensor["Repitition Rate (Hz)"]) || 10,
   }));

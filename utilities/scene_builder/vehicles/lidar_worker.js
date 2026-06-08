@@ -1,24 +1,5 @@
 // LiDAR ray-casting worker — runs off the main thread so the UI stays responsive
 
-function elevLinear(n, lo, hi) {
-  return Array.from({length: n}, (_, i) => n === 1 ? lo : lo + i * (hi - lo) / (n - 1));
-}
-
-const LIDAR_RING_ANGLES = {
-  "VLP-16":  elevLinear(16, -15, 15),
-  "HDL-32E": elevLinear(32, -30.67, 10.67),
-  "HDL-64E": elevLinear(32, -24.9, 2.0),
-  "M8":      elevLinear(8, -4.0, 8.0),
-  "OS1":     elevLinear(16, -16.6, 16.6),
-  "OS1-16":  elevLinear(16, -16.6, 16.6),
-  "OS2":     elevLinear(32, -22.5, 22.5),
-  "LMS-291": [0],
-  "RS32":    elevLinear(32, -25.0, 15.0),
-  "OS0":     elevLinear(32, -45.0, 45.0),
-  "BPearl":  elevLinear(32, -90.0, -1.0),
-  "FourPi":  elevLinear(16, -90.0, 90.0),
-};
-
 function rayTriIntersect(ox, oy, oz, dx, dy, dz, ax, ay, az, bx, by, bz, cx, cy, cz) {
   const e1x = bx-ax, e1y = by-ay, e1z = bz-az;
   const e2x = cx-ax, e2y = cy-ay, e2z = cz-az;
@@ -44,8 +25,15 @@ function elevColor(t) {
 }
 
 self.onmessage = function(e) {
-  const { jobId, ghostId, gx, gy, gz, visRange, tris, elevAngles, totalYaw, pitchRad, rollRad } = e.data;
-  const AZ_STEPS = 72;
+  const {
+    jobId, ghostId, gx, gy, gz, visRange, tris, elevAngles,
+    horizontalRange = [-180, 180], horizontalStep = 5,
+    totalYaw, pitchRad, rollRad,
+  } = e.data;
+  const azLow = Number(horizontalRange[0]) || 0;
+  const azHigh = Number(horizontalRange[1]) || 0;
+  const azSpan = Math.max(0, azHigh - azLow);
+  const AZ_STEPS = Math.max(1, Math.min(180, Math.ceil(azSpan / Math.max(0.1, horizontalStep))));
 
   const cy = Math.cos(totalYaw), sy = Math.sin(totalYaw);
   const cp = Math.cos(-pitchRad), sp = Math.sin(-pitchRad);
@@ -76,7 +64,7 @@ self.onmessage = function(e) {
     const cosEl = Math.cos(elevRad), sinEl = Math.sin(elevRad);
     const hitPts = [];
     for (let i = 0; i < AZ_STEPS; i++) {
-      const az = (i / AZ_STEPS) * 2 * Math.PI;
+      const az = (azLow + (i / AZ_STEPS) * azSpan) * Math.PI / 180;
       let dx = cosEl * Math.cos(az), dy = cosEl * Math.sin(az), dz = sinEl;
       const dy1 = cr*dy - sr*dz, dz1 = sr*dy + cr*dz; dy = dy1; dz = dz1;
       const dx2 = cp*dx + sp*dz, dz2 = -sp*dx + cp*dz; dx = dx2; dz = dz2;

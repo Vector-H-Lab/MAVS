@@ -1,12 +1,13 @@
 // Sensor inspector rendering and visualization toggle state.
 import { sensorItems, vizToggleBar, lidarVizBtn, cameraVizBtn } from '../core/dom.js';
-import { SENSOR_MODELS, SENSOR_TYPES, sensorsFor } from './sensors.js';
+import { sensorCatalogEntry, sensorModelsFor, sensorTypes, sensorsFor } from './sensors.js';
 
 export function renderSensorPanel(vehicle, selectedSensorId = null) {
   const sensors = sensorsFor(vehicle);
   sensorItems.innerHTML = "";
   for (const sensor of sensors) {
-    const models = SENSOR_MODELS[sensor.type] || [];
+    const models = sensorModelsFor(sensor.type);
+    const selectedEntry = sensorCatalogEntry(sensor);
     const isCollapsed = sensor.collapsed === true;
     const item = document.createElement("div");
     item.className = "sensor-item" + (sensor.id === selectedSensorId ? " selected" : "");
@@ -21,9 +22,9 @@ export function renderSensorPanel(vehicle, selectedSensorId = null) {
       ${isCollapsed ? "" : `
       <div class="sensor-body">
         <select class="sensor-type">
-          ${SENSOR_TYPES.map(t => `<option value="${t}"${t === sensor.type ? " selected" : ""}>${t}</option>`).join("")}
+          ${sensorTypes().map(t => `<option value="${t}"${t === sensor.type ? " selected" : ""}>${t}</option>`).join("")}
         </select>
-        ${models.length ? `<select class="sensor-model">${models.map(m => `<option value="${m}"${m === sensor.model ? " selected" : ""}>${m}</option>`).join("")}</select>` : ""}
+        ${models.length ? `<select class="sensor-model">${models.map(m => `<option value="${m.id}"${m.id === selectedEntry?.id ? " selected" : ""}>${m.label}${m.source === "json" ? " (JSON)" : ""}</option>`).join("")}</select>` : ""}
         <div class="path-vehicles-label">Offset from vehicle CG (m)</div>
         <div class="row">
           <label>X<input type="number" class="sensor-ox" step="0.1" value="${sensor.offset[0]}"></label>

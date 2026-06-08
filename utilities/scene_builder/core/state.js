@@ -10,6 +10,7 @@ export const state = {
   randomZones: [],
   paths: [],
   vehicleDefs: [],
+  sensorCatalog: { types: [], models: [] },
 
   selectedIds: new Set(),
   selectedZoneId: null,

@@ -1,6 +1,6 @@
 import { state } from '../core/state.js';
 import { lidarProgress } from '../core/dom.js';
-import { sensorsFor } from './sensors.js';
+import { sensorCatalogEntry, sensorsFor } from './sensors.js';
 
 let _gl = null;
 let _planeRenderObject = null;
@@ -23,21 +23,6 @@ export function initLidarPreview({ gl, planeRenderObject, modelCache, modelMatri
 function elevLinear(n, lo, hi) {
   return Array.from({length: n}, (_, i) => n === 1 ? lo : lo + i * (hi - lo) / (n - 1));
 }
-
-const LIDAR_RING_ANGLES = {
-  "VLP-16":  elevLinear(16, -15, 15),
-  "HDL-32E": elevLinear(32, -30.67, 10.67),
-  "HDL-64E": elevLinear(32, -24.9, 2.0),
-  "M8":      elevLinear(8, -4.0, 8.0),
-  "OS1":     elevLinear(16, -16.6, 16.6),
-  "OS1-16":  elevLinear(16, -16.6, 16.6),
-  "OS2":     elevLinear(32, -22.5, 22.5),
-  "LMS-291": [0],
-  "RS32":    elevLinear(32, -25.0, 15.0),
-  "OS0":     elevLinear(32, -45.0, 45.0),
-  "BPearl":  elevLinear(32, -90.0, -1.0),
-  "FourPi":  elevLinear(16, -90.0, 90.0),
-};
 
 function rayTriIntersect(ox, oy, oz, dx, dy, dz, ax, ay, az, bx, by, bz, cx, cy, cz) {
   const e1x = bx-ax, e1y = by-ay, e1z = bz-az;
@@ -159,6 +144,8 @@ function elevColor(t) {
 function buildLidarHitPoints(ghost, sensor, chassis) {
   const [gx, gy, gz] = ghost.position;
   const visRange = Math.max(5, sensor.visRange || 20);
+  const sensorDefinition = sensorCatalogEntry(sensor);
+  const sensorDefinitionId = sensorDefinition?.id || sensor.model || sensor.inputFile || "";
   const entry = lidarSegCache.get(ghost.id);
 
   if (entry) {
@@ -168,7 +155,7 @@ function buildLidarHitPoints(ghost, sensor, chassis) {
     if (entry.version === lidarSceneVersion
       && entry.gx === gx && entry.gy === gy && entry.gz === gz
       && entry.visRange === visRange
-      && entry.model === sensor.model
+      && entry.sensorDefinitionId === sensorDefinitionId
       && entry.yaw === sensor.yaw
       && entry.pitch === sensor.pitch
       && entry.roll === sensor.roll) {
@@ -181,7 +168,9 @@ function buildLidarHitPoints(ghost, sensor, chassis) {
   }
 
   const jobId = ++lidarJobCounter;
-  const elevAngles = LIDAR_RING_ANGLES[sensor.model] || elevLinear(16, -15, 15);
+  const elevAngles = sensorDefinition?.metadata?.verticalAngles || elevLinear(16, -15, 15);
+  const horizontalRange = sensorDefinition?.metadata?.horizontalRange || [-180, 180];
+  const horizontalStep = sensorDefinition?.metadata?.horizontalStep || 5;
   const def = state.vehicleDefs.find(d => d.name === chassis.vehicleDefName);
   const vehicleYaw = (chassis.rotation[2] - (def?.chassis_rotation?.[2] || 0)) * Math.PI / 180;
   const totalYaw = vehicleYaw + (sensor.yaw || 0) * Math.PI / 180;
@@ -195,7 +184,7 @@ function buildLidarHitPoints(ghost, sensor, chassis) {
     pendingJobId: jobId,
     version: lidarSceneVersion,
     gx, gy, gz, visRange,
-    model: sensor.model,
+    sensorDefinitionId,
     yaw: sensor.yaw,
     pitch: sensor.pitch,
     roll: sensor.roll,
@@ -205,7 +194,10 @@ function buildLidarHitPoints(ghost, sensor, chassis) {
   lidarSegCache.set(ghost.id, newEntry);
 
   lidarWorker.postMessage(
-    { jobId, ghostId: ghost.id, gx, gy, gz, visRange, tris: trisCopy, elevAngles, totalYaw, pitchRad, rollRad },
+    {
+      jobId, ghostId: ghost.id, gx, gy, gz, visRange, tris: trisCopy,
+      elevAngles, horizontalRange, horizontalStep, totalYaw, pitchRad, rollRad,
+    },
     [trisCopy.buffer]
   );
   updateLidarProgress();

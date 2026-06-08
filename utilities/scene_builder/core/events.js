@@ -31,6 +31,7 @@ export function startEditorLifecycle(ctx) {
     planeMeshPath,
     loadModel,
     loadAssets,
+    loadSensorCatalog,
     loadVehicleDefs,
     loadScenes,
     restoreDraft,
@@ -48,6 +49,19 @@ export function startEditorLifecycle(ctx) {
 
   loadModel(planeMeshPath).catch(() => {});
   loadAssets().catch((error) => setStatus(error.message));
+  loadSensorCatalog?.()
+    .then(() => syncInspector())
+    .catch((error) => setStatus(error.message));
+  if (loadSensorCatalog) {
+    const sensorCatalogInterval = window.setInterval(() => {
+      loadSensorCatalog()
+        .then((changed) => {
+          if (changed) syncInspector();
+        })
+        .catch(() => {});
+    }, 3000);
+    cleanupCallbacks.push(() => window.clearInterval(sensorCatalogInterval));
+  }
   loadVehicleDefs().catch(() => {});
   loadScenes().catch((error) => setStatus(error.message));
   restoreDraft()

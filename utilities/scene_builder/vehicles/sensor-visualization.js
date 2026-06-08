@@ -1,19 +1,7 @@
 import { state } from '../core/state.js';
 import { gl } from '../core/dom.js';
 import { loc, gizmoBuffer, cylinderBuffer, cylinderVertexCount } from '../rendering/renderer.js';
-import { sensorsFor } from './sensors.js';
-
-// tan(hfov/2) and tan(vfov/2) from camera_models.h: array_size / (2 * focal_length)
-const CAMERA_FOV = {
-  "XCD-V60":          { th: 0.0012  / 0.0035, tv: 0.0009   / 0.0035 }, // 37.9° x 28.9°
-  "Flea":             { th: 0.003392/ 0.004,  tv: 0.002714  / 0.004  }, // 80.6° x 68.3°
-  "HD1080":           { th: 0.01125 / 0.009,  tv: 0.0075    / 0.009  }, // 102.7° x 79.6°
-  "MachineVision":    { th: 0.00175 / 0.0035, tv: 0.00175   / 0.0035 }, // 53.1° x 53.1°
-  "HDPathTraced":     { th: 0.01125 / 0.009,  tv: 0.0075    / 0.009  }, // same sensor as HD1080
-  "HalfHDPathTraced": { th: 0.01125 / 0.009,  tv: 0.0075    / 0.009  }, // same sensor, half res
-  "Sf3325":           { th: 0.002892/ 0.005,  tv: 0.001812  / 0.005  }, // 60.1° x 39.9°
-  "UavCamera":        { th: 0.02784 / 0.035,  tv: 0.01856   / 0.035  }, // 77.0° x 55.9°
-};
+import { sensorCatalogEntry, sensorsFor } from './sensors.js';
 
 const SENSOR_GHOST_COLORS = {
   lidar:   [1.0, 0.60, 0.10],
@@ -171,9 +159,12 @@ export function drawCameraFovGhosts(viewProj) {
 
     const [gx, gy, gz] = ghost.position;
     const dist = 3.0;
-    const fov = CAMERA_FOV[sensor.model] || { th: 1.0, tv: 0.5625 }; // fallback ~90°×56°
-    const hw = dist * fov.th;
-    const hv = dist * fov.tv;
+    const fov = sensorCatalogEntry(sensor)?.metadata?.cameraFov || {
+      tanHalfHorizontal: 1.0,
+      tanHalfVertical: 0.5625,
+    };
+    const hw = dist * fov.tanHalfHorizontal;
+    const hv = dist * fov.tanHalfVertical;
     const fc = [gx + fwd[0]*dist, gy + fwd[1]*dist, gz + fwd[2]*dist];
     const fcorners = [[-1, 1], [1, 1], [1, -1], [-1, -1]].map(([sr, su]) => [
       fc[0] + right[0]*hw*sr + up[0]*hv*su,

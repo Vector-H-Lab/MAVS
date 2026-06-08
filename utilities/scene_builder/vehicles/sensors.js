@@ -3,22 +3,48 @@ import { state } from '../core/state.js';
 import { objectById } from '../scene/objects.js';
 import { controllerModeFor, vehicleGroupObjects } from './vehicles.js';
 
-export const SENSOR_TYPES = ["lidar", "camera", "gps", "compass", "fisheye", "radar", "imu"];
-
-export const SENSOR_MODELS = {
-  lidar: ["HDL-32E", "HDL-64E", "M8", "OS1", "OS1-16", "OS2", "LMS-291", "VLP-16", "RS32", "OS0", "BPearl", "FourPi"],
-  camera: ["XCD-V60", "Flea", "HD1080", "MachineVision", "HDPathTraced", "HalfHDPathTraced", "Sf3325", "UavCamera"],
-  fisheye: [],
-  gps: [],
-  compass: [],
-  radar: [],
-  imu: [],
-};
+const DEFAULT_SENSOR_TYPES = ["lidar", "camera", "gps", "compass", "fisheye", "radar", "imu"];
 
 let clearSensorGhostLidarCache = () => {};
+let invalidateLidarCache = () => {};
 
 export function initSensors(ctx = {}) {
   clearSensorGhostLidarCache = ctx.clearSensorGhostLidarCache || clearSensorGhostLidarCache;
+  invalidateLidarCache = ctx.invalidateLidarCache || invalidateLidarCache;
+}
+
+export async function loadSensorCatalog() {
+  const response = await fetch("/api/sensor-catalog");
+  if (!response.ok) throw new Error(`Could not load sensor catalog (HTTP ${response.status})`);
+  const nextCatalog = await response.json();
+  const changed = JSON.stringify(nextCatalog) !== JSON.stringify(state.sensorCatalog);
+  state.sensorCatalog = nextCatalog;
+  if (changed) invalidateLidarCache();
+  return changed;
+}
+
+export function sensorTypes() {
+  return state.sensorCatalog.types?.length ? state.sensorCatalog.types : DEFAULT_SENSOR_TYPES;
+}
+
+export function sensorModelsFor(type) {
+  return (state.sensorCatalog.models || []).filter(entry => entry.type === type);
+}
+
+export function sensorCatalogEntry(sensor) {
+  const entries = state.sensorCatalog.models || [];
+  return entries.find(entry => entry.id === sensor.catalogId)
+    || entries.find(entry => entry.type === sensor.type && entry.source === "json" && entry.inputFile === sensor.inputFile)
+    || entries.find(entry => entry.type === sensor.type && entry.source === "json"
+      && sensor.inputFile?.replaceAll("\\", "/").endsWith(entry.relativePath))
+    || entries.find(entry => entry.type === sensor.type && entry.source === "builtin" && entry.model === sensor.model)
+    || null;
+}
+
+export function applySensorCatalogEntry(sensor, entry) {
+  sensor.catalogId = entry?.id || "";
+  sensor.model = entry?.source === "builtin" ? entry.model : "";
+  sensor.inputFile = entry?.source === "json" ? entry.inputFile : "";
 }
 
 export function sensorsFor(object) {

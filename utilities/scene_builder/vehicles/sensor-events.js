@@ -2,7 +2,7 @@ import { state } from '../core/state.js';
 import { lidarVizBtn, cameraVizBtn, addSensorBtn, sensorItems } from '../core/dom.js';
 import { selectedObjects, selectObject } from '../scene/selection.js';
 import {
-  SENSOR_MODELS, sensorsFor, setSensors,
+  applySensorCatalogEntry, sensorModelsFor, sensorsFor, setSensors,
   syncSensorGhosts, updateSensorOffsetFromGhost,
 } from './sensors.js';
 import { vehicleGroupObjects } from './vehicles.js';
@@ -55,11 +55,11 @@ export function initSensorEvents({ setStatus }) {
     const vehicle = selectedObjects().find(o => o.vehicleDefName);
     if (!vehicle) return;
     const sensors = sensorsFor(vehicle);
-    sensors.push({
+    const defaultModel = sensorModelsFor("lidar")[0] || null;
+    const sensor = {
       id: state.nextSensorId++,
       name: `lidar_${sensors.length + 1}`,
       type: "lidar",
-      model: SENSOR_MODELS.lidar[0],
       offset: [0, 0, 0],
       yaw: 0,
       pitch: 0,
@@ -67,7 +67,9 @@ export function initSensorEvents({ setStatus }) {
       hz: 10,
       showRings: false,
       visRange: 20,
-    });
+    };
+    applySensorCatalogEntry(sensor, defaultModel);
+    sensors.push(sensor);
     setSensors(vehicle, sensors);
     const addChassis = vehicleGroupObjects(vehicle).find(o => o.vehicleRole === "chassis") || vehicle;
     syncSensorGhosts(addChassis);
@@ -102,15 +104,16 @@ export function initSensorEvents({ setStatus }) {
       sensor.type = newType;
       const nameMatch = sensor.name.match(/^([a-z]+)_(\d+)$/);
       if (nameMatch && nameMatch[1] === oldType) sensor.name = `${newType}_${nameMatch[2]}`;
-      const models = SENSOR_MODELS[sensor.type] || [];
-      sensor.model = models[0] || "";
+      applySensorCatalogEntry(sensor, sensorModelsFor(sensor.type)[0] || null);
       setSensors(vehicle, sensors);
       const typeChassis = vehicleGroupObjects(vehicle).find(o => o.vehicleRole === "chassis") || vehicle;
       syncSensorGhosts(typeChassis);
       invalidateLidarCache();
       renderSensorPanel(vehicle);
       return;
-    } else if (cl.contains("sensor-model")) sensor.model = e.target.value;
+    } else if (cl.contains("sensor-model")) {
+      applySensorCatalogEntry(sensor, sensorModelsFor(sensor.type).find(entry => entry.id === e.target.value) || null);
+    }
     else if (cl.contains("sensor-ox")) sensor.offset[0] = Number(e.target.value) || 0;
     else if (cl.contains("sensor-oy")) sensor.offset[1] = Number(e.target.value) || 0;
     else if (cl.contains("sensor-oz")) sensor.offset[2] = Number(e.target.value) || 0;

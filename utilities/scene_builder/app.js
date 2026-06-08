@@ -31,7 +31,7 @@ import {
 } from './vehicles/vehicles.js';
 import {
   initSensors,
-  sensorsFor, syncCameraGhost, syncAllSensorGhosts,
+  loadSensorCatalog, sensorCatalogEntry, sensorsFor, syncCameraGhost, syncAllSensorGhosts,
 } from './vehicles/sensors.js';
 import {
   initPaths,
@@ -98,7 +98,7 @@ initDraftStorage({
 });
 initGroundSnap({ setStatus });
 initLidarPreview({ gl, planeRenderObject, modelCache, modelMatrix, objectWorldAABB, drawPoints, setStatus });
-initSensors({ clearSensorGhostLidarCache });
+initSensors({ clearSensorGhostLidarCache, invalidateLidarCache });
 initCanvasController({ setStatus });
 initSensorEvents({ setStatus });
 initEditorActions({ setStatus });
@@ -129,6 +129,7 @@ initSceneIO({
   controllerModeFor,
   vehicleParamsFor,
   sensorsFor,
+  sensorCatalogEntry,
   selectedPath,
   cameraPosition,
   addVehicle,
@@ -140,6 +141,7 @@ startEditorLifecycle({
   planeMeshPath,
   loadModel,
   loadAssets,
+  loadSensorCatalog,
   loadVehicleDefs,
   loadScenes,
   restoreDraft,
