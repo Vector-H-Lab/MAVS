@@ -45,7 +45,7 @@ export function updateCameraFromKeyboard(dt) {
   if (Math.hypot(movement[0], movement[1], movement[2]) === 0) {
     return;
   }
-  const speed = Math.max(8, state.camera.distance * 0.55);
+  const speed = Math.max(8, state.camera.distance * 0.55) * state.camera.moveSpeedMultiplier;
   state.camera.target = add(state.camera.target, mul(norm(movement), speed * dt));
 }
 

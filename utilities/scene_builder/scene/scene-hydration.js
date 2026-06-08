@@ -67,6 +67,9 @@ export function restoreCameraFromDraft(camera) {
   if (Number.isFinite(camera.distance)) state.camera.distance = camera.distance;
   if (Number.isFinite(camera.yaw)) state.camera.yaw = camera.yaw;
   if (Number.isFinite(camera.pitch)) state.camera.pitch = camera.pitch;
+  if (Number.isFinite(camera.moveSpeedMultiplier)) {
+    state.camera.moveSpeedMultiplier = Math.max(0.1, Math.min(10, camera.moveSpeedMultiplier));
+  }
 }
 
 export function restorePlaneFromDraft(planeScale, setPlaneScale) {

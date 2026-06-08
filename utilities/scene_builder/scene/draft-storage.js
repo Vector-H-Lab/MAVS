@@ -16,6 +16,7 @@ let syncAllSensorGhosts;
 let setPlaneScale;
 let renderPathList;
 let syncInspector;
+let syncCameraSpeedControl;
 let setStatus;
 
 export function initDraftStorage(ctx) {
@@ -26,6 +27,7 @@ export function initDraftStorage(ctx) {
     setPlaneScale,
     renderPathList,
     syncInspector,
+    syncCameraSpeedControl,
     setStatus,
   } = ctx);
 }
@@ -69,6 +71,7 @@ export function saveDraft() {
         distance: state.camera.distance,
         yaw: state.camera.yaw,
         pitch: state.camera.pitch,
+        moveSpeedMultiplier: state.camera.moveSpeedMultiplier,
       },
     }));
   } catch (error) {
@@ -107,6 +110,7 @@ export async function restoreDraft() {
   sceneNameInput.value = draft.sceneName || "";
   restorePlaneFromDraft(draft.planeScale, setPlaneScale);
   restoreCameraFromDraft(draft.camera);
+  syncCameraSpeedControl();
 
   renderPathList();
   syncInspector();

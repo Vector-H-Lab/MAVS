@@ -28,6 +28,7 @@ export const state = {
     distance: 70,
     yaw: -45 * Math.PI / 180,
     pitch: 52 * Math.PI / 180,
+    moveSpeedMultiplier: 1,
   },
 
   ui: {

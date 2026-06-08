@@ -16,6 +16,13 @@
       <span>Scene Tools</span>
       <button id="addRandomZone">Add Random Zone</button>
       <button id="addPath">Add Path</button>
+      <label class="camera-speed-control">
+        <span>Camera Move Speed</span>
+        <div>
+          <input id="cameraMoveSpeed" type="range" min="0.1" max="10" step="0.1" value="1">
+          <output id="cameraMoveSpeedValue" for="cameraMoveSpeed">1.0&times;</output>
+        </div>
+      </label>
       <div id="pathList" class="path-list"></div>
     </div>
     <details class="vehicle-def-panel">

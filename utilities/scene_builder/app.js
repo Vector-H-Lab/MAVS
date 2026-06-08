@@ -49,7 +49,7 @@ import { renderAssets, renderVehicleDefs } from './ui/asset-ui.js';
 import { initGroundSnap } from './interaction/ground-snap.js';
 import { initLidarPreview, invalidateLidarCache, invalidateLidarForBounds, clearSensorGhostLidarCache } from './vehicles/lidar-preview.js';
 import { initSensorEvents } from './vehicles/sensor-events.js';
-import { initEditorActions } from './ui/editor-actions.js';
+import { initEditorActions, syncCameraSpeedControl } from './ui/editor-actions.js';
 import { setStatus } from './core/status.js';
 import { initInspectorEvents } from './ui/inspector-events.js';
 
@@ -94,6 +94,7 @@ initDraftStorage({
   setPlaneScale,
   renderPathList,
   syncInspector,
+  syncCameraSpeedControl,
   setStatus,
 });
 initGroundSnap({ setStatus });

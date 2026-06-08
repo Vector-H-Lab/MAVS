@@ -85,6 +85,29 @@ body.inspector-collapsed {
   width: 100%;
 }
 
+.camera-speed-control {
+  display: grid;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.camera-speed-control > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 8px;
+}
+
+.camera-speed-control input {
+  width: 100%;
+}
+
+.camera-speed-control output {
+  color: var(--text);
+  font-size: 12px;
+  text-align: right;
+}
+
 h1,
 h2 {
   margin: 0;

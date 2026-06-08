@@ -32,6 +32,7 @@ http://127.0.0.1:8765
 - Use the selection panel buttons to switch the gizmo: `Move`, `Rotate`, or `Scale`.
 - Press `W` for move, `E` for rotate, and `R` for scale when an object is selected.
 - Hold right mouse and use `W`, `A`, `S`, and `D` to free-move the camera viewpoint. `W` moves toward what you are looking at.
+- Use the `Camera Move Speed` slider in the left panel to adjust WASD translation speed from `0.1x` to `10x`.
 - The active selection is outlined with a yellow bounding box.
 - Press `Ctrl+C` to copy the selected object or group and `Ctrl+V` to paste duplicates.
 - Hold `Alt` while dragging a move gizmo arrow to duplicate the selection and move the copy.
@@ -39,7 +40,7 @@ http://127.0.0.1:8765
 - Multi-selection rotate and scale use the selection center as the pivot.
 - Left-drag a selected object body to move it freely on the ground plane.
 - Use `Snap to Ground` to align the selected object's bottom to the highest mesh surface below it.
-- Right-drag in the viewport to orbit the camera.
+- Right-drag in the viewport to orbit the camera freely above or below the horizon.
 - Shift-drag or middle-drag to pan.
 - Mouse wheel zooms.
 - Edit position, yaw/pitch/roll, and scale in the inspector.

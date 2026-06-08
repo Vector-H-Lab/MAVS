@@ -189,7 +189,7 @@ export function initCanvasController({ setStatus }) {
     state.ui.lastPointer = [event.clientX, event.clientY];
     if (state.ui.orbiting) {
       state.camera.yaw -= dx * 0.006;
-      state.camera.pitch = Math.max(0.1, Math.min(1.45, state.camera.pitch + dy * 0.006));
+      state.camera.pitch = Math.max(-1.45, Math.min(1.45, state.camera.pitch + dy * 0.006));
     } else if (state.ui.panning) {
       const eye = cameraPosition();
       const forward = norm(sub(state.camera.target, eye));

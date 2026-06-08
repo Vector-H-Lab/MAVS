@@ -4,6 +4,7 @@ import {
   newSceneBtn, loadSceneFileBtn, saveSceneBtn, saveSceneAsBtn, exportSimulationBtn, loadSimulationBtn,
   fileMenuButton, fileMenu, previewSceneBtn, runSimulationBtn,
   planeSizeInput, addRandomZoneButton, assetSearch, addPathBtn,
+  cameraMoveSpeedInput, cameraMoveSpeedValue,
   vehicleControllerMode, followPath,
   pathAddVehicle, pathAddVehicleBtn,
   togglePathPlacementBtn, clearLastWaypointBtn, saveWaypointsBtn, deletePathBtn,
@@ -93,6 +94,11 @@ export function initEditorActions({ setStatus }) {
   listen(loadSimulationBtn, "click", runFileAction(loadSimulationFromDialog));
   listen(previewSceneBtn, "click", previewScene);
   listen(runSimulationBtn, "click", runSimulation);
+  listen(cameraMoveSpeedInput, "input", () => {
+    state.camera.moveSpeedMultiplier = Math.max(0.1, Math.min(10, Number(cameraMoveSpeedInput.value) || 1));
+    syncCameraSpeedControl();
+  });
+  syncCameraSpeedControl();
 
   listen(addRandomZoneButton, "click", () => setZonePlacementMode(!state.ui.zonePlacementMode));
   listen(assetSearch, "input", renderAssets);
@@ -167,4 +173,11 @@ export function initEditorActions({ setStatus }) {
       renderPathList();
     }
   });
+}
+
+export function syncCameraSpeedControl() {
+  const speed = Math.max(0.1, Math.min(10, Number(state.camera.moveSpeedMultiplier) || 1));
+  state.camera.moveSpeedMultiplier = speed;
+  cameraMoveSpeedInput.value = String(speed);
+  cameraMoveSpeedValue.value = `${speed.toFixed(1)}×`;
 }

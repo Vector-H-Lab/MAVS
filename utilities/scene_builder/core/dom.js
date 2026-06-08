@@ -34,6 +34,8 @@ export const vehicleDefList = document.getElementById("vehicleDefList");
 export const pathList = document.getElementById("pathList");
 export const addPathBtn = document.getElementById("addPath");
 export const addRandomZoneButton = document.getElementById("addRandomZone");
+export const cameraMoveSpeedInput = document.getElementById("cameraMoveSpeed");
+export const cameraMoveSpeedValue = document.getElementById("cameraMoveSpeedValue");
 
 // Inspector shell
 export const inspectorEl = document.querySelector(".inspector");

@@ -28,6 +28,18 @@ WAYPOINTS_ROOT = DATA_ROOT / "waypoints"
 ACTORS_ROOT = DATA_ROOT / "actors" / "actors"
 VEHICLE_DEFS_ROOT = DATA_ROOT / "vehicles" / "rp3d_vehicles"
 SENSOR_DEFS_ROOT = DATA_ROOT / "sensors"
+NATIVE_SENSOR_MODELS = {
+    ("lidar", "M8"),
+    ("lidar", "HDL-64E"),
+    ("lidar", "HDL-32E"),
+    ("lidar", "VLP-16"),
+    ("lidar", "LMS-291"),
+    ("camera", "Flea3-4mm"),
+    ("camera", "XCD-V60"),
+    ("radar", "Delphi Long Range"),
+    ("radar", "Delphi Mid Range"),
+}
+NATIVE_SENSOR_TYPES = {"lidar", "camera", "gps", "compass", "fisheye", "radar", "imu"}
 HOST = "127.0.0.1"
 PORT = 8765
 
@@ -233,6 +245,26 @@ def sensor_catalog() -> dict:
         "types": ["lidar", "camera", "gps", "compass", "fisheye", "radar", "imu"],
         "models": entries,
     }
+
+
+def native_sensor_record(raw_sensor: object) -> dict | None:
+    if not isinstance(raw_sensor, dict):
+        return None
+    sensor = dict(raw_sensor)
+    sensor_type = str(sensor.get("Type", "")).lower()
+    sensor["Type"] = sensor_type
+    if sensor_type not in NATIVE_SENSOR_TYPES:
+        return None
+    if sensor_type == "compass":
+        sensor.setdefault("Input File", "compass")
+    elif sensor_type == "gps":
+        pass
+    elif sensor.get("Model") and (sensor_type, str(sensor["Model"])) not in NATIVE_SENSOR_MODELS:
+        return None
+    elif not sensor.get("Model") and not sensor.get("Input File"):
+        return None
+    sensor.setdefault("Number Processors", 1)
+    return sensor
 
 
 def safe_data_path(relative_path: str) -> Path:
@@ -620,7 +652,11 @@ class SceneBuilderHandler(BaseHTTPRequestHandler):
                 orientation = [math.cos(half), 0.0, 0.0, math.sin(half)]
 
                 # Build sensor list; inject GPS and compass if absent (both required by A* path planner)
-                sensors = list(path_vehicle.get("sensors", []))
+                sensors = []
+                for raw_sensor in path_vehicle.get("sensors", []):
+                    sensor = native_sensor_record(raw_sensor)
+                    if sensor is not None:
+                        sensors.append(sensor)
                 if not any(str(s.get("Type", "")).lower() == "gps" for s in sensors):
                     sensors.append({
                         "Type": "gps",
@@ -650,9 +686,6 @@ class SceneBuilderHandler(BaseHTTPRequestHandler):
                         "Repitition Rate (Hz)": 10.0,
                         "Number Processors": 1,
                     })
-                for s in sensors:
-                    s.setdefault("Number Processors", 1)
-
                 initial_pos = path_vehicle.get("initial_position", [0.0, 0.0, 0.0])
 
                 waypoint_abs = str((WAYPOINTS_ROOT / primary_path_name).resolve())

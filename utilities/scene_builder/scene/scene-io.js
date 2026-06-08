@@ -14,6 +14,17 @@ let vehicleRepresentatives, controllerModeFor, vehicleParamsFor, sensorsFor, sen
 let selectedPath, cameraPosition;
 let addVehicle, syncAllSensorGhosts;
 let currentScenePath = null;
+const NATIVE_SENSOR_MODELS = new Set([
+  "lidar:M8",
+  "lidar:HDL-64E",
+  "lidar:HDL-32E",
+  "lidar:VLP-16",
+  "lidar:LMS-291",
+  "camera:Flea3-4mm",
+  "camera:XCD-V60",
+  "radar:Delphi Long Range",
+  "radar:Delphi Mid Range",
+]);
 
 export function initSceneIO(ctx) {
   ({
@@ -164,21 +175,9 @@ export function simulationVehiclesJson() {
         ];
       }
     }
-    const sensorList = sensorsFor(chassis).map(s => {
-      const entry = sensorCatalogEntry?.(s);
-      return {
-        Name: s.name,
-        Type: s.type,
-        ...(entry?.source === "json" || s.inputFile
-          ? { "Input File": entry?.inputFile || s.inputFile }
-          : (s.model ? { Model: s.model } : {})),
-        Offset: [...s.offset],
-        // The editor uses positive pitch for "look up"; MAVS' +Y quaternion
-        // rotation points the sensor's +X forward axis downward.
-        Orientation: eulerToQuat(s.yaw || 0, -(s.pitch || 0), s.roll || 0),
-        "Repitition Rate (Hz)": s.hz,
-      };
-    });
+    const sensorList = sensorsFor(chassis)
+      .map(sceneBuilderSensorToMavs)
+      .filter(Boolean);
     vehicles.push({
       definition_file: def.definition_file,
       initial_position: vehicleInitialPosition(chassis, def),
@@ -192,6 +191,30 @@ export function simulationVehiclesJson() {
     });
   }
   return { vehicles };
+}
+
+function sceneBuilderSensorToMavs(s) {
+  const type = String(s.type || "").toLowerCase();
+  if (!type) return null;
+  const entry = sensorCatalogEntry?.(s);
+  const inputFile = entry?.source === "json" ? entry.inputFile : s.inputFile;
+  const model = entry?.source === "builtin"
+    ? entry.model
+    : (NATIVE_SENSOR_MODELS.has(`${type}:${s.model}`) ? s.model : "");
+  const sensor = {
+    Name: s.name || type,
+    Type: type,
+    Offset: [...(s.offset || [0, 0, 0])],
+    // The editor uses positive pitch for "look up"; MAVS' +Y quaternion
+    // rotation points the sensor's +X forward axis downward.
+    Orientation: eulerToQuat(s.yaw || 0, -(s.pitch || 0), s.roll || 0),
+    "Repitition Rate (Hz)": s.hz,
+  };
+  if (type === "gps") return sensor;
+  if (type === "compass") return { ...sensor, "Input File": inputFile || "compass" };
+  if (inputFile) return { ...sensor, "Input File": inputFile };
+  if (model) return { ...sensor, Model: model };
+  return null;
 }
 
 export function vehicleInitialPosition(chassis, def) {
