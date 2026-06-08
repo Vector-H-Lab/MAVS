@@ -6,7 +6,7 @@ import {
 } from './scene/scene-io.js';
 import {
   gl,
-  scenePicker, sceneNameInput, planeSizeInput,
+  sceneNameInput, planeSizeInput,
   assetPaths,
   addRandomZoneButton,
 } from './core/dom.js';
@@ -23,6 +23,7 @@ import {
 } from './scene/objects.js';
 import {
   initVehicles,
+  addVehicle,
   normalizeVehicleParams, normalizeControllerMode,
   vehicleGroupObjects, vehicleParamsFor,
   controllerModeFor,
@@ -110,7 +111,6 @@ initInspectorEvents();
 
 initSceneIO({
   sceneNameInput,
-  scenePicker,
   assetPaths,
   planeMeshPath,
   planeRenderObject,
@@ -131,6 +131,8 @@ initSceneIO({
   sensorsFor,
   selectedPath,
   cameraPosition,
+  addVehicle,
+  syncAllSensorGhosts,
 });
 
 startEditorLifecycle({

@@ -29,15 +29,21 @@
   <main class="workspace">
     <nav class="menubar">
       <span class="menubar-brand">MAVS Scene Builder</span>
+      <div class="file-menu">
+        <button id="fileMenuButton" aria-haspopup="true" aria-expanded="false">File</button>
+        <div id="fileMenu" class="file-menu-popup" role="menu" hidden>
+          <button id="newScene" role="menuitem">New Scene</button>
+          <button id="loadSceneFile" role="menuitem">Load Scene</button>
+          <div class="file-menu-sep"></div>
+          <button id="saveScene" role="menuitem">Save Scene</button>
+          <button id="saveSceneAs" role="menuitem">Save Scene As</button>
+          <div class="file-menu-sep"></div>
+          <button id="exportSimulation" role="menuitem">Export Simulation</button>
+          <button id="loadSimulation" role="menuitem">Load Simulation</button>
+        </div>
+      </div>
       <div class="menubar-sep"></div>
-      <button id="newScene">New Scene</button>
-      <div class="menubar-sep"></div>
-      <select id="scenePicker" aria-label="Saved scenes"></select>
-      <button id="loadScene">Load</button>
-      <div class="menubar-sep"></div>
-      <input id="sceneName" value="scene_builder_scene.json" aria-label="Scene filename">
-      <button id="saveScene">Save Scene</button>
-      <button id="exportSimulation">Export Sim</button>
+      <input id="sceneName" value="scene_builder_scene.json" aria-label="Current scene filename" readonly>
     </nav>
     <canvas id="viewport"></canvas>
     <div id="selectionMarquee" hidden></div>

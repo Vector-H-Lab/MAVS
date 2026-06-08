@@ -227,6 +227,18 @@ def main() -> None:
             (_e.get("camera_offset", [-8.0, 0.0, 3.5]) for v, mode, _, _e in vehicles if mode == "human"),
             [-8.0, 0.0, 3.5],
         )
+        render_camera = None
+        for vehicle, _mode, _controller, entry in vehicles:
+            camera_sensor = next(
+                (
+                    sensor for sensor in entry.get("sensors", [])
+                    if str(sensor.get("Type", "")).lower() == "camera"
+                ),
+                None,
+            )
+            if camera_sensor is not None:
+                render_camera = (vehicle, camera_sensor)
+                break
     except Exception as exc:
         die("vehicle/controller loading", exc)
 
@@ -241,8 +253,19 @@ def main() -> None:
         cam.SetSaturationAndTemp(1.05, 7500.0)
         cam.SetGammaAndGain(0.75, 2.0)
         cam.RenderShadows(True)
-        cam.SetOffset([0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0])
-        cam.SetPose([x, y, z], pose_quaternion(heading, pitch))
+        if render_camera is not None:
+            render_vehicle, camera_sensor = render_camera
+            camera_offset = camera_sensor.get("Offset", [0.0, 0.0, 0.0])
+            camera_orientation = camera_sensor.get("Orientation", [1.0, 0.0, 0.0, 0.0])
+            cam.SetOffset(camera_offset, camera_orientation)
+            cam.SetPose(render_vehicle.GetPosition(), render_vehicle.GetOrientation())
+            log(
+                f"Render camera: {camera_sensor.get('Name', 'camera')} "
+                f"at relative offset {camera_offset}"
+            )
+        else:
+            cam.SetOffset([0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0])
+            cam.SetPose([x, y, z], pose_quaternion(heading, pitch))
         cam.Update(env, dt)
         cam.Display()
     except Exception as exc:
@@ -251,7 +274,11 @@ def main() -> None:
     log("")
     log("Controls:")
     log("  Click the MAVS window first.")
-    if human_vehicle is not None:
+    if render_camera is not None:
+        log("  Rendering from the first camera sensor placed in the scene builder.")
+        if human_vehicle is not None:
+            log("  W/S/A/D       drive the human-controlled vehicle")
+    elif human_vehicle is not None:
         log("  W / Up        throttle (drive forward)")
         log("  S / Down      brake / reverse")
         log("  A / Left      steer left")
@@ -286,7 +313,10 @@ def main() -> None:
                     vehicle.Update(env, 0.0, 0.0, 1.0, dt)
             env.AdvanceTime(dt)
 
-            if human_vehicle is not None:
+            if render_camera is not None:
+                render_vehicle, _camera_sensor = render_camera
+                cam.SetPose(render_vehicle.GetPosition(), render_vehicle.GetOrientation())
+            elif human_vehicle is not None:
                 veh_pos = human_vehicle.GetPosition()
                 veh_heading = human_vehicle.GetHeading()
                 veh_z = float(veh_pos[2]) if len(veh_pos) > 2 else 0.0

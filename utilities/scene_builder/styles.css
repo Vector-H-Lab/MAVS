@@ -249,7 +249,49 @@ h2 {
 }
 
 .menubar #sceneName {
-  width: 180px;
+  width: min(360px, 45vw);
+  color: var(--muted);
+}
+
+.file-menu {
+  position: relative;
+}
+
+.file-menu > button {
+  height: 28px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.file-menu-popup {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  width: 190px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+}
+
+.file-menu-popup button {
+  width: 100%;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.file-menu-popup button:hover {
+  background: var(--panel-2);
+}
+
+.file-menu-sep {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--line);
 }
 
 .statusbar {

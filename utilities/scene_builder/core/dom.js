@@ -6,12 +6,15 @@ export const gl = canvas.getContext("webgl", { antialias: true });
 
 // Menubar
 export const newSceneBtn = document.getElementById("newScene");
-export const loadSceneBtn = document.getElementById("loadScene");
+export const loadSceneFileBtn = document.getElementById("loadSceneFile");
 export const saveSceneBtn = document.getElementById("saveScene");
+export const saveSceneAsBtn = document.getElementById("saveSceneAs");
 export const exportSimulationBtn = document.getElementById("exportSimulation");
+export const loadSimulationBtn = document.getElementById("loadSimulation");
+export const fileMenuButton = document.getElementById("fileMenuButton");
+export const fileMenu = document.getElementById("fileMenu");
 export const previewSceneBtn = document.getElementById("previewScene");
 export const runSimulationBtn = document.getElementById("runSimulation");
-export const scenePicker = document.getElementById("scenePicker");
 export const sceneNameInput = document.getElementById("sceneName");
 
 // Statusbar

@@ -31,6 +31,46 @@ HOST = "127.0.0.1"
 PORT = 8765
 
 
+def choose_json_file(title: str, initial_dir: Path) -> Path | None:
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        selected = filedialog.askopenfilename(
+            parent=root,
+            title=title,
+            initialdir=str(initial_dir),
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+        )
+    finally:
+        root.destroy()
+    return Path(selected).resolve() if selected else None
+
+
+def choose_json_save_file(title: str, initial_dir: Path, initial_name: str) -> Path | None:
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        selected = filedialog.asksaveasfilename(
+            parent=root,
+            title=title,
+            initialdir=str(initial_dir),
+            initialfile=initial_name,
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+        )
+    finally:
+        root.destroy()
+    return Path(selected).resolve() if selected else None
+
+
 def vehicle_def_records() -> list[dict]:
     records: list[dict] = []
     if not VEHICLE_DEFS_ROOT.exists():
@@ -261,6 +301,81 @@ class SceneBuilderHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed_path = urlparse(self.path).path
+        if parsed_path == "/api/load-scene-file":
+            try:
+                target = choose_json_file("Load Scene", SAVE_ROOT)
+                if target is None:
+                    self.send_json({"cancelled": True})
+                    return
+                self.send_json({
+                    "name": target.name,
+                    "path": str(target),
+                    "scene": json.loads(target.read_text(encoding="utf-8")),
+                })
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, status=400)
+            return
+
+        if parsed_path == "/api/save-scene-file":
+            length = int(self.headers.get("Content-Length", "0"))
+            try:
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                requested_path = payload.get("path")
+                target = Path(requested_path).resolve() if requested_path else choose_json_save_file(
+                    "Save Scene",
+                    SAVE_ROOT,
+                    sanitize_scene_name(str(payload.get("name", "scene_builder_scene.json"))),
+                )
+                if target is None:
+                    self.send_json({"cancelled": True})
+                    return
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(json.dumps(payload["scene"], indent=2), encoding="utf-8")
+                self.send_json({"saved": True, "name": target.name, "path": str(target)})
+            except Exception as exc:
+                self.send_json({"saved": False, "error": str(exc)}, status=400)
+            return
+
+        if parsed_path == "/api/load-simulation-file":
+            try:
+                target = choose_json_file("Load Simulation", SIM_ROOT)
+                if target is None:
+                    self.send_json({"cancelled": True})
+                    return
+                simulation = json.loads(target.read_text(encoding="utf-8"))
+                scene_value = simulation.get("Scene", {}).get("Input File")
+                if not scene_value:
+                    raise ValueError("Simulation does not contain Scene.Input File")
+                scene_path = Path(str(scene_value))
+                if not scene_path.is_absolute():
+                    scene_path = (DATA_ROOT / scene_path).resolve()
+                if not scene_path.exists():
+                    raise ValueError(f"Simulation scene does not exist: {scene_path}")
+                driver_value = simulation.get("Driver", {}).get("Input File")
+                driver_name = "simulation_path.json"
+                waypoints = []
+                if driver_value:
+                    driver_path = Path(str(driver_value))
+                    if not driver_path.is_absolute():
+                        driver_path = (DATA_ROOT / driver_path).resolve()
+                    driver_name = driver_path.name
+                    if driver_path.exists():
+                        driver_data = json.loads(driver_path.read_text(encoding="utf-8"))
+                        waypoints = driver_data.get("Waypoints", [])
+                self.send_json({
+                    "name": target.name,
+                    "path": str(target),
+                    "simulation": simulation,
+                    "driver_name": driver_name,
+                    "waypoints": waypoints,
+                    "scene_name": scene_path.name,
+                    "scene_path": str(scene_path),
+                    "scene": json.loads(scene_path.read_text(encoding="utf-8")),
+                })
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, status=400)
+            return
+
         if parsed_path == "/api/preview-scene":
             length = int(self.headers.get("Content-Length", "0"))
             try:
@@ -478,9 +593,17 @@ class SceneBuilderHandler(BaseHTTPRequestHandler):
                 }
 
                 SIM_ROOT.mkdir(parents=True, exist_ok=True)
-                sim_config_path = (SIM_ROOT / f"{name_stem}_sim.json").resolve()
-                if not sim_config_path.is_relative_to(SIM_ROOT.resolve()):
-                    raise ValueError("Invalid sim config path")
+                if payload.get("choose_path"):
+                    sim_config_path = choose_json_save_file(
+                        "Export Simulation",
+                        SIM_ROOT,
+                        f"{name_stem}_sim.json",
+                    )
+                    if sim_config_path is None:
+                        self.send_json({"cancelled": True})
+                        return
+                else:
+                    sim_config_path = (SIM_ROOT / f"{name_stem}_sim.json").resolve()
                 sim_config_path.write_text(json.dumps(sim_config, indent=4), encoding="utf-8")
 
                 self.send_json({

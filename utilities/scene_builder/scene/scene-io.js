@@ -4,7 +4,7 @@ import { zoneCount } from '../zones/zones.js';
 import { colorForPath } from './objects.js';
 
 // Injected by app.js via initSceneIO() to avoid circular imports.
-let sceneNameInput, scenePicker, assetPaths;
+let sceneNameInput, assetPaths;
 let planeMeshPath, planeRenderObject;
 let setStatus, loadModel, setPlaneScale;
 let renderAssets, annotateVehicleGroups, renderVehicleDefs;
@@ -12,10 +12,12 @@ let syncInspector, renderPathList, invalidateLidarCache, clearPathSelection;
 let setZonePlacementMode;
 let vehicleRepresentatives, controllerModeFor, vehicleParamsFor, sensorsFor;
 let selectedPath, cameraPosition;
+let addVehicle, syncAllSensorGhosts;
+let currentScenePath = null;
 
 export function initSceneIO(ctx) {
   ({
-    sceneNameInput, scenePicker, assetPaths,
+    sceneNameInput, assetPaths,
     planeMeshPath, planeRenderObject,
     setStatus, loadModel, setPlaneScale,
     renderAssets, annotateVehicleGroups, renderVehicleDefs,
@@ -23,6 +25,7 @@ export function initSceneIO(ctx) {
     setZonePlacementMode,
     vehicleRepresentatives, controllerModeFor, vehicleParamsFor, sensorsFor,
     selectedPath, cameraPosition,
+    addVehicle, syncAllSensorGhosts,
   } = ctx);
 }
 
@@ -166,7 +169,9 @@ export function simulationVehiclesJson() {
       Type: s.type,
       ...(s.model ? { Model: s.model } : {}),
       Offset: [...s.offset],
-      Orientation: eulerToQuat(s.yaw || 0, s.pitch || 0, s.roll || 0),
+      // The editor uses positive pitch for "look up"; MAVS' +Y quaternion
+      // rotation points the sensor's +X forward axis downward.
+      Orientation: eulerToQuat(s.yaw || 0, -(s.pitch || 0), s.roll || 0),
       "Repitition Rate (Hz)": s.hz,
     }));
     vehicles.push({
@@ -244,9 +249,14 @@ export async function exportSimulation() {
         vehicles,
         waypoints: state.paths.map((p) => ({ name: p.name, waypoints: p.waypoints })),
         primary_path_name: primaryPathName,
+        choose_path: true,
       }),
     });
     const result = await response.json();
+    if (result.cancelled) {
+      setStatus("Export cancelled");
+      return;
+    }
     if (!response.ok || !result.saved) {
       setStatus(result.error || "Export failed", true);
       return;
@@ -288,20 +298,144 @@ export async function runSimulation() {
 }
 
 export async function saveScene() {
-  const name = sceneNameInput.value;
+  return saveSceneFile(false);
+}
+
+export async function saveSceneAs() {
+  return saveSceneFile(true);
+}
+
+async function saveSceneFile(saveAs) {
   setStatus("Saving...");
-  const response = await fetch("/api/save-scene", {
+  const response = await fetch("/api/save-scene-file", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, scene: sceneJson() }),
+    body: JSON.stringify({
+      name: sceneNameInput.value,
+      path: saveAs ? null : currentScenePath,
+      scene: sceneJson(),
+    }),
   });
   const result = await response.json();
+  if (result.cancelled) {
+    setStatus("Save cancelled");
+    return;
+  }
   if (!response.ok || !result.saved) {
     setStatus(result.error || "Save failed", true);
     return;
   }
-  setStatus(`Saved ${result.relative_path}`);
+  currentScenePath = result.path;
+  sceneNameInput.value = result.name;
+  setStatus(`Saved ${result.path}`);
   loadScenes().catch(() => {});
+}
+
+export async function loadSceneFromDialog() {
+  setStatus("Choose a scene file...");
+  const response = await fetch("/api/load-scene-file", { method: "POST" });
+  const result = await response.json();
+  if (result.cancelled) {
+    setStatus("Load cancelled");
+    return;
+  }
+  if (!response.ok || result.error) {
+    setStatus(result.error || "Scene load failed", true);
+    return;
+  }
+  await loadSceneData(result.scene, result.name);
+  currentScenePath = result.path;
+}
+
+export async function loadSimulationFromDialog() {
+  setStatus("Choose a simulation file...");
+  const response = await fetch("/api/load-simulation-file", { method: "POST" });
+  const result = await response.json();
+  if (result.cancelled) {
+    setStatus("Load cancelled");
+    return;
+  }
+  if (!response.ok || result.error) {
+    setStatus(result.error || "Simulation load failed", true);
+    return;
+  }
+  await loadSceneData(result.scene, result.scene_name);
+  currentScenePath = result.scene_path;
+  await hydrateSimulation(result.simulation, result.waypoints || [], result.driver_name || "simulation_path.json");
+  setStatus(`Loaded simulation ${result.name} and scene ${result.scene_name}`);
+}
+
+async function hydrateSimulation(simulation, waypoints, driverName) {
+  const vehicle = simulation?.Vehicle;
+  if (!vehicle || !addVehicle) return;
+  const inputFile = String(vehicle["Input File"] || "").replaceAll("\\", "/");
+  const definitionFile = inputFile.split("/").pop();
+  const def = state.vehicleDefs.find((candidate) => candidate.definition_file === definitionFile);
+  if (!def) {
+    setStatus(`Loaded scene, but vehicle preset was not found for ${definitionFile}`, true);
+    return;
+  }
+
+  const initial = vehicle["Initial Position"] || [0, 0, 0];
+  await addVehicle(def, [Number(initial[0]) || 0, Number(initial[1]) || 0, Number(initial[2]) || 0]);
+  const chassis = state.objects.findLast((object) => object.vehicleRole === "chassis" && object.vehicleDefName === def.name);
+  if (!chassis) return;
+
+  const q = vehicle["Initial Orientation"] || [1, 0, 0, 0];
+  const heading = Math.atan2(
+    2 * ((Number(q[0]) || 0) * (Number(q[3]) || 0) + (Number(q[1]) || 0) * (Number(q[2]) || 0)),
+    1 - 2 * ((Number(q[2]) || 0) ** 2 + (Number(q[3]) || 0) ** 2),
+  ) * 180 / Math.PI;
+  const group = state.objects.filter((object) => object.vehicleGroupId === chassis.vehicleGroupId);
+  for (const part of group) {
+    part.position = rotatePointAroundAxis(part.position, initial, "z", heading);
+    part.rotation[2] += heading;
+  }
+
+  chassis.sensors = (simulation.Sensors || []).map((sensor) => ({
+    ...sensorEuler(sensor.Orientation),
+    id: state.nextSensorId++,
+    name: sensor.Name || sensor.Type || "sensor",
+    type: String(sensor.Type || "").toLowerCase(),
+    model: sensor.Model || "",
+    offset: [...(sensor.Offset || [0, 0, 0])],
+    hz: Number(sensor["Repitition Rate (Hz)"]) || 10,
+  }));
+
+  if (waypoints.length) {
+    const pathId = state.nextPathId++;
+    state.paths.push({
+      id: pathId,
+      name: driverName,
+      waypoints: waypoints.map((point) => [Number(point[0]) || 0, Number(point[1]) || 0]),
+      color: colorForPath(driverName),
+      visible: true,
+    });
+    for (const part of group) {
+      part.pathId = pathId;
+      part.controllerMode = "path";
+    }
+  }
+  syncAllSensorGhosts?.();
+  renderPathList();
+  syncInspector();
+}
+
+function sensorEuler(quaternion = [1, 0, 0, 0]) {
+  const [w, x, y, z] = quaternion.map((value) => Number(value) || 0);
+  const roll = Math.atan2(2 * (w*x + y*z), 1 - 2 * (x*x + y*y));
+  const pitch = Math.asin(Math.max(-1, Math.min(1, 2 * (w*y - z*x))));
+  const yaw = Math.atan2(2 * (w*z + x*y), 1 - 2 * (y*y + z*z));
+  return {
+    yaw: yaw * 180 / Math.PI,
+    pitch: -pitch * 180 / Math.PI,
+    roll: roll * 180 / Math.PI,
+  };
+}
+
+export function clearCurrentScenePath() {
+  currentScenePath = null;
+  sceneNameInput.value = "untitled_scene.json";
 }
 
 export async function previewScene() {
@@ -361,34 +495,6 @@ export async function loadScenes() {
   }
   const result = await response.json();
   state.savedScenes = result.scenes || [];
-  scenePicker.innerHTML = "";
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = state.savedScenes.length ? "Choose scene..." : "No saved scenes";
-  scenePicker.appendChild(placeholder);
-  for (const scene of state.savedScenes) {
-    const option = document.createElement("option");
-    option.value = scene.path;
-    option.textContent = scene.name;
-    scenePicker.appendChild(option);
-  }
-}
-
-export async function loadSceneFromPicker() {
-  setZonePlacementMode(false);
-  const path = scenePicker.value;
-  if (!path) {
-    setStatus("Choose a scene to load");
-    return;
-  }
-  setStatus(`Loading ${path}`);
-  const response = await fetch(`/api/scene?path=${encodeURIComponent(path)}`);
-  const result = await response.json();
-  if (!response.ok || result.error) {
-    setStatus(result.error || "Scene load failed", true);
-    return;
-  }
-  await loadSceneData(result.scene, result.name || path);
 }
 
 export async function loadSceneData(scene, name) {

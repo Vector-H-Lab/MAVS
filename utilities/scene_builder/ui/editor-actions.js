@@ -1,14 +1,18 @@
 import { state } from '../core/state.js';
 import {
   deleteObjectBtn, ungroupObjectsBtn, groupObjectsBtn, newGroupNameInput, snapToGroundBtn,
-  newSceneBtn, loadSceneBtn, saveSceneBtn, exportSimulationBtn, previewSceneBtn, runSimulationBtn,
+  newSceneBtn, loadSceneFileBtn, saveSceneBtn, saveSceneAsBtn, exportSimulationBtn, loadSimulationBtn,
+  fileMenuButton, fileMenu, previewSceneBtn, runSimulationBtn,
   planeSizeInput, addRandomZoneButton, assetSearch, addPathBtn,
   vehicleControllerMode, followPath,
   pathAddVehicle, pathAddVehicleBtn,
   togglePathPlacementBtn, clearLastWaypointBtn, saveWaypointsBtn, deletePathBtn,
   pathNameInput,
 } from '../core/dom.js';
-import { saveWaypoints, exportSimulation, runSimulation, saveScene, previewScene, loadSceneFromPicker } from '../scene/scene-io.js';
+import {
+  saveWaypoints, exportSimulation, runSimulation, saveScene, saveSceneAs, previewScene,
+  loadSceneFromDialog, loadSimulationFromDialog, clearCurrentScenePath,
+} from '../scene/scene-io.js';
 import { setPlaneScale } from '../rendering/renderer.js';
 import { hasSelection, selectObject, selectedObjects } from '../scene/selection.js';
 import { ungroupSelection, groupSelection, setVehicleControllerMode, setObjectPath } from '../vehicles/vehicles.js';
@@ -25,6 +29,26 @@ let _setStatus = () => {};
 
 export function initEditorActions({ setStatus }) {
   _setStatus = setStatus;
+
+  const closeFileMenu = () => {
+    fileMenu.hidden = true;
+    fileMenuButton.setAttribute("aria-expanded", "false");
+  };
+  const runFileAction = (action) => () => {
+    closeFileMenu();
+    action();
+  };
+
+  listen(fileMenuButton, "click", (event) => {
+    event.stopPropagation();
+    fileMenu.hidden = !fileMenu.hidden;
+    fileMenuButton.setAttribute("aria-expanded", String(!fileMenu.hidden));
+  });
+  listen(fileMenu, "click", (event) => event.stopPropagation());
+  listen(document, "click", closeFileMenu);
+  listen(document, "keydown", (event) => {
+    if (event.key === "Escape") closeFileMenu();
+  });
 
   listen(deleteObjectBtn, "click", () => {
     if (!hasSelection()) return;
@@ -43,6 +67,7 @@ export function initEditorActions({ setStatus }) {
   listen(snapToGroundBtn, "click", snapSelectedToGround);
 
   listen(newSceneBtn, "click", () => {
+    closeFileMenu();
     setZonePlacementMode(false);
     clearPathSelection();
     state.objects = [];
@@ -55,14 +80,17 @@ export function initEditorActions({ setStatus }) {
     state.nextPathId = 1;
     planeSizeInput.value = "100";
     setPlaneScale(1);
+    clearCurrentScenePath();
     renderPathList();
     syncInspector();
     _setStatus("Started a blank scene");
   });
 
-  listen(loadSceneBtn, "click", loadSceneFromPicker);
-  listen(saveSceneBtn, "click", saveScene);
-  listen(exportSimulationBtn, "click", exportSimulation);
+  listen(loadSceneFileBtn, "click", runFileAction(loadSceneFromDialog));
+  listen(saveSceneBtn, "click", runFileAction(saveScene));
+  listen(saveSceneAsBtn, "click", runFileAction(saveSceneAs));
+  listen(exportSimulationBtn, "click", runFileAction(exportSimulation));
+  listen(loadSimulationBtn, "click", runFileAction(loadSimulationFromDialog));
   listen(previewSceneBtn, "click", previewScene);
   listen(runSimulationBtn, "click", runSimulation);
 
